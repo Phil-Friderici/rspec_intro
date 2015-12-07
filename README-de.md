@@ -59,10 +59,11 @@ Parameter die nicht gesetzt sein dürfen und auch der Abbruch im Fehlerfalle sol
 
 Nichtvorhandensein testen:
 ```ruby
-it { should_not contain_package('pkg') }
 it { should_not contain_file('awk_symlink') }
 it { should_not contain_exec('locale-gen') }
 it { should have_pam__service_resource_count(0) }
+it { should contain_file('/etc/logrotate.d/apache').without_owner('root') }
+it { should contain_file('postfix_main.cf').without_content(/^virtual_alias_maps = hash:\/etc\/postfix\/virtual$/) }
 ```
 
 Abbruch testen:
@@ -80,6 +81,7 @@ Wenn eine Klasse (init.pp) eine andere aufruft (submodule.pp), braucht in der au
 und der verwendeten Parameter überprüft werden. Teste nicht das Ergebnis der zweiten Klasse. Vertraue!
 
 Beispiel:
+
 [manifest/init.pp](https://github.com/ghoneycutt/puppet-module-pam/blob/8e44c135f0587e81668c2024cbb0d64a8f2c808f/manifests/init.pp#L945)
 ```puppet
 create_resources('pam::service',$services)
@@ -100,25 +102,33 @@ file { "pam.d-service-${name}":
 Guter Test:  
 spec/classes/init_spec.rb
 ```ruby
+let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
+
 it { should have_pam__service_resource_count(1) }
+
+it do
+  should contain_pam__service('testservice').with({
+    'content' => 'foo',
+  })
+end
 ```
 
 Schlechter Test:  
 [spec/classes/init_spec.rb](https://github.com/ghoneycutt/puppet-module-pam/blob/8e44c135f0587e81668c2024cbb0d64a8f2c808f/spec/classes/init_spec.rb#L259-L271)
 ```ruby
-  let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
+let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
 
-  it {
-    should contain_file('pam.d-service-testservice').with({
-      'ensure'  => 'file',
-      'path'    => '/etc/pam.d/testservice',
-      'owner'   => 'root',
-      'group'   => 'root',
-      'mode'    => '0644',
-    })
-  }
+it {
+  should contain_file('pam.d-service-testservice').with({
+    'ensure'  => 'file',
+    'path'    => '/etc/pam.d/testservice',
+    'owner'   => 'root',
+    'group'   => 'root',
+    'mode'    => '0644',
+  })
+}
 
-  it { should contain_file('pam.d-service-testservice').with_content('foo') }
+it { should contain_file('pam.d-service-testservice').with_content('foo') }
 
 ```
 

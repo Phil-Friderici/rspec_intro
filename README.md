@@ -2,7 +2,7 @@
 
 # What ?
 Rspec tests describe the wanted functionality (expectations) and allows automated testing of them.
-Complete tests describe all functional requirements that we have for a module.
+Complete tests describe all functional requirements for a module.
 
 
 # Why ?
@@ -13,15 +13,15 @@ The idea of continuous integration only works with automated tests.
 
 # Recommendations
 ### Right From The Start
-Create the tests simultaneously with the code. While developing, you know best what is really essential and where
-the stumbling blocks are to be found.
-In an ideal world you would define the required behaviour (tests) first before you start with implementation of the module.
+Create the tests simultaneously while writing the code. While developing, it is best known what is really essential
+and where the stumbling blocks are to be found.
+In an ideal world you would define the required behaviour (tests) first before you start to implement the code of the module.
 
 
 ### Structure
 Write the test on the motto: "from the general to the specific"
 
-First you should test the default behaviour of the module. What does it do without using any optional parameter.
+First you should test the default behaviour of the module. What does the module when called without using any optional parameter.
 You could also add a test which uses most to all features at once. This depends on the case of application.
 
 After the basic functionallity is fully tested including all details, it is sufficient to only verify individual aspects
@@ -45,7 +45,7 @@ it do
 end
 ```
 
-Testing an individual aspect:
+Testing an individual aspect only:
 ```ruby
 it { should contain_service('autofs').with_ensure('stopped') }
 ```
@@ -59,6 +59,8 @@ Testing absence:
 it { should_not contain_file('awk_symlink') }
 it { should_not contain_exec('locale-gen') }
 it { should have_pam__service_resource_count(0) }
+it { should contain_file('/etc/logrotate.d/apache').without_owner('root') }
+it { should contain_file('postfix_main.cf').without_content(/^virtual_alias_maps = hash:\/etc\/postfix\/virtual$/) }
 ```
 
 Testing error messages:
@@ -76,6 +78,7 @@ When a class (init.pp) calls another (submodule.pp) you only need to test the ca
 Don't test the outcome of the other class. Confide!
 
 Example:
+
 [manifest/init.pp](https://github.com/ghoneycutt/puppet-module-pam/blob/8e44c135f0587e81668c2024cbb0d64a8f2c808f/manifests/init.pp#L945)
 ```puppet
 create_resources('pam::service',$services)
@@ -96,25 +99,34 @@ file { "pam.d-service-${name}":
 Good testing:
 spec/classes/init_spec.rb
 ```ruby
+let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
+
 it { should have_pam__service_resource_count(1) }
+
+it do
+  should contain_pam__service('testservice').with({
+    'content' => 'foo',
+  })
+end
+
 ```
 
 Bad testing:
 [spec/classes/init_spec.rb](https://github.com/ghoneycutt/puppet-module-pam/blob/8e44c135f0587e81668c2024cbb0d64a8f2c808f/spec/classes/init_spec.rb#L259-L271)
 ```ruby
-  let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
+let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
 
-  it {
-    should contain_file('pam.d-service-testservice').with({
-      'ensure'  => 'file',
-      'path'    => '/etc/pam.d/testservice',
-      'owner'   => 'root',
-      'group'   => 'root',
-      'mode'    => '0644',
-    })
-  }
+it {
+  should contain_file('pam.d-service-testservice').with({
+    'ensure'  => 'file',
+    'path'    => '/etc/pam.d/testservice',
+    'owner'   => 'root',
+    'group'   => 'root',
+    'mode'    => '0644',
+  })
+}
 
-  it { should contain_file('pam.d-service-testservice').with_content('foo') }
+it { should contain_file('pam.d-service-testservice').with_content('foo') }
 
 ```
 
