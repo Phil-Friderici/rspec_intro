@@ -1,85 +1,81 @@
-# Rspec testing für Puppetmodule
+# Rspec testing Puppet modules
 
-# Was ?
-Rspec Tests beschreiben die gewünschten Funktionalitäten (Erwartungshaltungen) und ermöglichen die automatisierte Überprüfung davon.
-Vollständige Tests beschreiben alle funktionalen Anforderungen die an ein Modul gestellt werden.
-
-
-# Warum ?
-Rspec Tests helfen Fehler zu finden. Logische Fehler, konzeptionelle Fehler und auch Software Fehler.
-Rspec Tests erleichtern es in komplexen Modulen Änderungen ohne unerwünschte Nebenwirkungen vorzunehmen. (zB: fremde Module)
-Fehlende automatische Tests füren die Idee der kontinuierlichen Integration (CI) ad absurdum.
+# What ?
+Rspec tests describe the wanted functionality (expectations) and allows automated testing of them.
+Complete tests describe all functional requirements that we have for a module.
 
 
-# Empfehlungen
-### Von Anfang an
-Entwickle die Tests von Anfang an parallel zur Funktionalität. Während der Entwicklung weiss man am besten worauf es ankommt und wo
-eventuelle Stolpersteine liegen.
-Im Idealfall wird erst mit den Tests das geforderte Verhalten definiert und anschließend im Modul implementiert.
+# Why ?
+Help to find errors, Logical errors, conceptual errors and also errors caused by the used software environment.
+Tests ease maintaining and implementation of new features into unknown or complex modules.
+The idea of continuous integration only works with automated tests.
 
-### Aufbau
-Schreibe die Test nach dem Motto: "Vom Allgemeinen zum Speziellen"
 
-Als erstes sollte die Grundfunktionalität des Modul getestet werden. Bewährt hat sich je ein Test mit minimaler (nur Pflichtparameter)
-und maximaler (inklusive optionaler Parameter) Funktionalität. Dies ist vom Einzelfall abhängig.
+# Recommendations
+### Right From The Start
+Create the tests simultaneously with the code. While developing, you know best what is really essential and where
+the stumbling blocks are to be found.
+In an ideal world you would define the required behaviour (tests) first before you start with implementation of the module.
 
-Nachdem die Grundfunktionalität vollständig überprüft wurde, reicht es in den folgenden Test nur noch die Einzelaspekte zu
-überprüfen. Wenn unterschiedlichen Werte für einen Parameter getestet werden, reicht es jetzt nur die dadurch beeinflussten
-Zustände zu überprüfen.
 
-Beispiel:  
-ActiveDirectory Modul
+### Structure
+Write the test on the motto: "from the general to the specific"
 
-Vollständig:
+First you should test the default behaviour of the module. What does it do without using any optional parameter.
+You could also add a test which uses most to all features at once. This depends on the case of application.
+
+After the basic functionallity is fully tested including all details, it is sufficient to only verify individual aspects
+in later tests. When testing different values for a parameter, it is fair enough to only check the affected conditions.
+
+
+Example:
+puppet-module-autofs (https://github.com/gusson/puppet-module-autofs)
+
+
+Testing the complete resource:
 ```ruby
-it {
-  should contain_file('afs_init_script').only_with({
-    'ensure'  => 'file',
-    'path'    => '/etc/init.d/openafs-client',
-    'owner'   => 'root',
-    'group'   => 'root',
-    'mode'    => '0755',
-    'source'  => 'puppet:///modules/afs/openafs-client-RedHat',
+it do
+  should contain_service('autofs').with({
+    'ensure'    => 'running',
+    'name'      => 'autofs',
+    'enable'    => 'true',
+    'require'   => 'Package[autofs]',
+    'subscribe' => ['File[autofs_sysconfig]','File[auto.master]'],
   })
-}
+end
 ```
 
-Einzelaspekt:
+Testing an individual aspect:
 ```ruby
-it {
-  should contain_file('afs_init_script').with({
-    'ensure'  => 'absent',
-  })
-}
+it { should contain_service('autofs').with_ensure('stopped') }
 ```
 
-### Gegenproben
-Verwende Gegenproben wo es Sinn ergibt. Gegenproben können das Nichtvorhandensein von Funktions- oder Klassenaufrufen sein.
-Parameter die nicht gesetzt sein dürfen und auch der Abbruch im Fehlerfalle sollen getestet werden.
+### Crosschecking
+Use cross checks where it makes sense. Cross checks could check that function or class calls are not included.
+Resource parameters that shouldn't be set and error messages because of failures should be tested.
 
-Nichtvorhandensein testen:
+Testing absence:
 ```ruby
-it { should_not contain_package('pkg') }
 it { should_not contain_file('awk_symlink') }
 it { should_not contain_exec('locale-gen') }
 it { should have_pam__service_resource_count(0) }
 ```
 
-Abbruch testen:
+Testing error messages:
 ```ruby
 it 'should fail' do
-  expect {
-    should contain_class('pam')
-  }.to raise_error(Puppet::Error,/Pam: vas is not supported on #{v[:osfamily]} #{v[:release]}/)
+  expect do
+    should contain_class(subject)
+  end.to raise_error(Puppet::Error, /Pam: vas is not supported on #{v[:osfamily]} #{v[:release]}/)
 end
 ```
 
-### Submodule
-Jede Klasse (oder Define) soll für sich isoliert getestet werden.
-Wenn eine Klasse (init.pp) eine andere aufruft (submodule.pp), braucht in der aufrufenden Klasse nur der Aufruf der anderen Klasse
-und der verwendeten Parameter überprüft werden. Teste nicht das Ergebnis der zweiten Klasse. Vertraue!
+### Submodules
+Each class and define should be tested isolated on it's own.
+When a class (init.pp) calls another (submodule.pp) you only need to test the call and the used parameters itself.
+Don't test the outcome of the other class. Confide!
 
-Beispiel:
+Example:
 [manifest/init.pp](https://github.com/ghoneycutt/puppet-module-pam/blob/8e44c135f0587e81668c2024cbb0d64a8f2c808f/manifests/init.pp#L945)
 ```puppet
 create_resources('pam::service',$services)
@@ -97,13 +93,13 @@ file { "pam.d-service-${name}":
 }
 ```
 
-Guter Test:  
+Good testing:
 spec/classes/init_spec.rb
 ```ruby
 it { should have_pam__service_resource_count(1) }
 ```
 
-Schlechter Test:  
+Bad testing:
 [spec/classes/init_spec.rb](https://github.com/ghoneycutt/puppet-module-pam/blob/8e44c135f0587e81668c2024cbb0d64a8f2c808f/spec/classes/init_spec.rb#L259-L271)
 ```ruby
   let (:params) { {:services => { 'testservice' => { 'content' => 'foo' } } } }
@@ -122,22 +118,21 @@ Schlechter Test:
 
 ```
 
-
-# Grenzen
-Spec Tests können keinen Nachweis der Fehlerfreiheit erbringen. Es kann lediglich nachweisen das bestimmte Testfälle erfolgreich sind.
-Es können nur Fehler gefunden werden für die ein Test existiert.
-Jede Funktionalitätsänderung sollte dementsprechend (zwingend) mit entsprechenden Tests ausgeliefert werden.
+# Boundaries
+Rspec testing can't deliver the proof of being free from errors. It can only proof that the particular test cases have been met.
+It can only find errors in case a test does exist.
+Therefore each functional change should (mandatory) be delivered with corrosponing tests.
 
 
 # Weblinks
-Informationen aus erster Hand:
+First-hand Information:
 - http://rspec-puppet.com/tutorial/
 - http://rspec-puppet.com/matchers/
 
-Rspec Erfahrungsbericht (nicht Puppet spezifisch):
-- https://blog.softwareinmotion.de/tag/rspec/
+Rspec tipps (not Puppet related):
+- http://blog.carbonfive.com/2010/10/21/rspec-best-practices/
 
-### Ausführliches Ausgabeformat
+### Verbose output while testing
 ~/.bashrc:
 ```bash
 export SPEC_OPTS="--format documentation"
